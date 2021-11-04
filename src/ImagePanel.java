@@ -16,5 +16,7 @@ class ImagePanel extends JPanel {
     image = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
   }
 
-  @Override public void paintComponent(Graphics g) {  g.drawImage(image, 0, 0, null);  }
+  @Override public void paintComponent(Graphics g) {
+    g.drawImage(image, 0, 0, null);
+  }
 }
