@@ -5,32 +5,30 @@ import java.awt.image.BufferedImage;
 //  the render manager which receives rendering calls and starts the rendering threads
 
 class RenderManager {
-  private boolean isWorking = false;
   private BufferedImage image;
   private int imgWidth, imgHeight;
   private ImagePanel panel;
   private double centerX, centerY, zoomFact;
-
-  boolean isWorking() {  return this.isWorking;  }
+  private ForkJoinPool pool;
 
   RenderManager(ImagePanel p) {
     panel = p;
     image = p.getImage();
     imgWidth = p.getImgWidth();
     imgHeight = p.getImgHeight();
+    pool = new ForkJoinPool();
   }
+
+  boolean isWorking() {  return !pool.isQuiescent();  }
 
   //  begin rendering the view at (x, y) with zoom factor z
   void startRender(double x, double y, double z) {
-    isWorking = true;
     centerX = x;
     centerY = y;
     zoomFact = z;
 
     //  start an initial rendering task that covers the whole image
-    ForkJoinPool.commonPool().invoke(new RenderTask(0, 0, imgWidth, imgHeight));
-
-    isWorking = false;
+    pool.execute(new RenderTask(0, 0, imgWidth, imgHeight));
   }
 
 
@@ -73,16 +71,18 @@ class RenderManager {
           Complex z = new Complex(z0);
 
           //  then iterate Z' = Z²+Z₀
-          for (int i = 0; i++ < Main.ITER;)  z = z.sqr().plus(z0);
+          int i = 0;
+          do  z = z.sqr().plus(z0);  while (++i < Main.ITER  &&  z.mag() < 4);
 
-          //  if the point is still within 2 units from origo then we
+          //  if the point is still within 4 units from origo then we
           //  consider it to belong to the mandelbrot set
-          int c = z.mag() < 2 ? 0x404040 : 0xb0b0b0;
+          int ic = (i-Main.ITER/2);
+          int c = i == Main.ITER ? 0x402020 : (100+ic*ic%150)*0x010101;
           image.setRGB(x, y, c);
         }
       }
 
-      panel.repaint(0, xStart, yStart, width, height);
+      panel.repaint(xStart, yStart, width, height);
     }
   }
 
