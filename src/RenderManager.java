@@ -2,77 +2,88 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
 import java.awt.image.BufferedImage;
 
+//  the render manager which receives rendering calls and starts the rendering threads
+
 class RenderManager {
   private boolean isWorking = false;
   private BufferedImage image;
-  private int width, height;
+  private int imgWidth, imgHeight;
   private ImagePanel panel;
-
-  private double xx, yy, zz;
+  private double centerX, centerY, zoomFact;
 
   boolean isWorking() {  return this.isWorking;  }
 
   RenderManager(ImagePanel p) {
     panel = p;
-    image = panel.image;
-    width = panel.width;
-    height = panel.height;
+    image = p.getImage();
+    imgWidth = p.getImgWidth();
+    imgHeight = p.getImgHeight();
   }
 
+  //  begin rendering the view at (x, y) with zoom factor z
   void startRender(double x, double y, double z) {
     isWorking = true;
-    xx = x;
-    yy = y;
-    zz = z;
-    ForkJoinPool.commonPool().invoke(new RenderTask(0, 0, width, height));
+    centerX = x;
+    centerY = y;
+    zoomFact = z;
+
+    //  start an initial rendering task that covers the whole image
+    ForkJoinPool.commonPool().invoke(new RenderTask(0, 0, imgWidth, imgHeight));
 
     isWorking = false;
   }
 
 
-
-  // inre klass
+  //  the class representing a rendering task which will recursively divide
+  //  into smaller tasks, and directly render a task when small enough
   private class RenderTask extends RecursiveAction {
 
-    private int xs, ys, w, h;
+    private int xStart, yStart, width, height;
 
     RenderTask(int x, int y, int w, int h) {
-      xs = x;
-      ys = y;
-      this.w = w;
-      this.h = h;
+      xStart = x;
+      yStart = y;
+      width = w;
+      height = h;
     }
 
+    //  the entry-point and logic for the recursive renderer
     public void compute() {
-      if (w * h > 5000) recurse();
-      else render();
+      if (width*height > Main.THRESHOLD)  recurse();
+      else                                render();
     }
 
-
+    //  if the task is too large then it is divided in half along the larger axis
     private void recurse() {
-      if (w > h) invokeAll(new RenderTask(xs, ys, w / 2, h),
-              new RenderTask(xs + w / 2, ys, w - w / 2, h));
+      if (width > height)  invokeAll(new RenderTask(xStart, yStart, width/2, height),
+                                     new RenderTask(xStart+width/2, yStart, width-width/2, height));
 
-      else invokeAll(new RenderTask(xs, ys, w, h / 2),
-              new RenderTask(xs, ys + h / 2, w, h - h / 2));
+      else                 invokeAll(new RenderTask(xStart, yStart, width, height/2),
+                                     new RenderTask(xStart, yStart+height/2, width, height-height/2));
     }
 
-
+    //  the rendering method that eventually renders and finishes each task
     private void render() {
 
-      for (int y = ys; y < ys + h; ++y) {
-        for (int x = xs; x < xs + w; ++x) {
-          Complex z = new Complex(xx + (x - width / 2) * zz / width, yy + (y - height / 2) * zz / width);
-          Complex z0 = new Complex(z);
-          for (int i = 0; i++ < 500; ) z = z.sqr().plus(z0);
+      for (int y = yStart; y < yStart+height; ++y) {
+        for (int x = xStart; x < xStart+width; ++x) {
+
+          //  for each pixel, compute its location Z in the complex plane
+          Complex z0 = new Complex(centerX+(x-imgWidth/2)*zoomFact/imgWidth, centerY+(y-imgHeight/2)*zoomFact/imgWidth);
+          Complex z = new Complex(z0);
+
+          //  then iterate Z' = Z²+Z₀
+          for (int i = 0; i++ < Main.ITER;)  z = z.sqr().plus(z0);
+
+          //  if the point is still within 2 units from origo then we
+          //  consider it to belong to the mandelbrot set
           int c = z.mag() < 2 ? 0x404040 : 0xb0b0b0;
           image.setRGB(x, y, c);
         }
       }
 
-      panel.repaint(0, xs, ys, w, h);
+      panel.repaint(0, xStart, yStart, width, height);
     }
-
   }
 
 }
