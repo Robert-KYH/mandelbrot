@@ -10,12 +10,18 @@ class RenderManager {
   private ImagePanel panel;
   private double centerX, centerY, zoomFact;
   private ForkJoinPool pool;
+  private int[] colorGradient = new int[400];
 
   RenderManager(ImagePanel p) {
     panel = p;
     image = p.getImage();
     imgWidth = p.getImgWidth();
     imgHeight = p.getImgHeight();
+
+    //  make a blue-yellow color gradient
+    for (int i = 0; i < 200; ++i)    colorGradient[i] = (250-i)<<16 | (250-i)<<8 | (50+i);
+    for (int i = 200; i < 400; ++i)  colorGradient[i] = (50+i-200)<<16 | (50+i-200)<<8 | (250-i+200);
+
     pool = new ForkJoinPool();
   }
 
@@ -76,8 +82,7 @@ class RenderManager {
 
           //  if the point is still within 4 units from origo then we
           //  consider it to belong to the mandelbrot set
-          int ic = (i-Main.ITER/2);
-          int c = i == Main.ITER ? 0x402020 : (100+ic*ic%150)*0x010101;
+          int c = i == Main.ITER ? 0x402020 : colorGradient[i%400];
           image.setRGB(x, y, c);
         }
       }
